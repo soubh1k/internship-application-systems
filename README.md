@@ -1,5 +1,13 @@
 # Cloudflare Internship Application: Systems
 
+## How to run?
+
+Compile as follows.
+`gcc -Wall icmp.c -o icmp -lm`
+
+Run as follows.
+`sudo ./icmp cloudflare.com`
+
 ## What is it?
 
 Please write a small Ping CLI application for MacOS or Linux.
