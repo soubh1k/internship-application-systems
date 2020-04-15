@@ -3,10 +3,10 @@
 ## How to run?
 
 Compile as follows.
-`gcc -Wall icmp.c -o icmp -lm`
+`gcc -Wall ping.c -o ping -lm`
 
 Run as follows.
-`sudo ./icmp cloudflare.com`
+`sudo ./ping cloudflare.com`
 
 ## What is it?
 
