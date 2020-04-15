@@ -16,7 +16,7 @@ Example usage:
 
 `sudo ./ping cloudflare.com`
 
-This applcation handles SIGINT interrupts to show statistics and gracefully close connections.
+This application handles SIGINT interrupts to show statistics and gracefully close connections.
 
 All time is shown as Wall Clock time.
 
