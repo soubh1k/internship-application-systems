@@ -190,8 +190,10 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 	tsum_2 /= (counter-1);
 	std_dev = sqrt(tsum_2 - tsum*tsum);
 
+	transmitted-=1; // Remove last packet which was interrupted
+
 	fprintf(stdout, "\n--- %s ping statistics ---\n", hostname);
-	double pkt_loss = (transmitted-received)/transmitted*100;
+	double pkt_loss = 1.0*(transmitted-received)/transmitted*100;
 	fprintf(stdout, "%d packets transmitted, %d received, %0.0f%% packet loss, time %0.0fms\n", transmitted, received, pkt_loss, millis);
 	fprintf(stdout, "rtt min/avg/max/mdev = %0.3f/%0.3f/%0.3f/%0.3f ms\n", mini, maxi, average, std_dev);
 }
