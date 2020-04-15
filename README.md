@@ -6,7 +6,19 @@ Compile as follows.
 `gcc -Wall ping.c -o ping -lm`
 
 Run as follows.
+`sudo ./ping [-c count] cloudflare.com`
+
+`count` is the number of ping packets to send. If count is 0 or count is absent, the loop will repeat infinite times until SIGINT interrupt occurs.
+
+Example usage:
+
+`sudo ./ping -c 10 cloudflare.com`
+
 `sudo ./ping cloudflare.com`
+
+This applcation handles SIGINT interrupts to show statistics and gracefully close connections.
+
+All time is shown as Wall Clock time.
 
 ## What is it?
 

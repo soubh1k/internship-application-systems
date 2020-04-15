@@ -1,9 +1,35 @@
+/*
+Soubhik Rakshit
+Cloudflare internship application
+
+Compile with 
+`gcc -Wall ping.c -o ping -lm`
+
+Run as
+sudo ./ping [-c count] cloudflare.com
+
+count is the number of ping packets to send.
+If count is 0 or count is absent, the loop will
+repeat infinite times until SIGINT interrupt occurs.
+
+Example usage:
+sudo ./ping -c 10 cloudflare.com
+sudo ./ping cloudflare.com
+
+This applcation handles SIGINT interrupts to show statistics 
+and gracefully close connections.
+
+All time is shown as Wall Clock time.
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <limits.h>
 #include <math.h>
+#include <ctype.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -27,12 +53,22 @@
 #define ID 5446
 
 int interrupt = 0; // 1 if SIGINT
+int count = 0;	// Number of ping requests. If 0, never stop
 
+/* 
+SIGINT triggers this function.
+A global interrupt flag is switched on to let the program
+know that it needs to gracefully kill itself.
+*/
 void handle_interrupt(int sig) {
 	// SIGINT
 	interrupt=1;
 }
 
+/*
+Calculate checksum of ICMP header breaking it into several
+16 byte (short) blocks.
+*/
 unsigned short checksum(short *data, size_t bytes) 
 {
 	if (bytes%2==1) {
@@ -55,6 +91,9 @@ unsigned short checksum(short *data, size_t bytes)
 	return result;
 }
 
+/*
+DNS lookup. Convert hostnames to IP addresses.
+*/
 char* dns(char *hostname, struct sockaddr_in *server) {
 	struct hostent *host;
 	char *ip_addr = (char *) malloc(sizeof(char)*MAX_HOST);
@@ -76,9 +115,14 @@ char* dns(char *hostname, struct sockaddr_in *server) {
 	return ip_addr;
 }
 
+/*
+Run the ping application. Print status of each packet.
+Finally, upon interrupt, print statistics.
+*/
 void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 	struct sockaddr_in receiver;
 
+	// Keep track of time
 	struct timeval start, end;
 	double mini=INT_MAX, maxi=0, average=0.0, std_dev;
 	float tsum=0.0, tsum_2=0.0; // Used for calculating RTT std dev
@@ -111,12 +155,14 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 	// Loop for multiple packets
 	int counter=0;
 
+	// Get total start time.
 	gettimeofday(&start, NULL);
-	while(++counter) {
+	while(count==0 || counter<count) {
+		counter++;
 		// Packet init
 		struct timeval start_pkt, end_pkt;
 	
-
+		// Create ICMP header
 		struct icmphdr hdr;
 		bzero(&hdr, sizeof(hdr));
 
@@ -129,11 +175,12 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 
 		// Calculate checksum by first setting all checksum bits to 0
 		hdr.checksum = 0; 
-		// Checksum is calculated using 2 byte blocks
+		// Checksum is calculated using 2 byte blocks (short)
 		hdr.checksum = checksum((short *)&hdr, sizeof(hdr));
 		
 		sleep(PING_DELAY);
 
+		// Start timer for particular packet
 		gettimeofday(&start_pkt, NULL);
 
 		// Send ICMP_ECHO packet
@@ -155,6 +202,7 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 		status = recvfrom(sockfd, &hdr, sizeof(hdr), 0, 
 						  (struct sockaddr *)&receiver, &receiver_addr_size);
 
+		// Get end time of partiular packet
 		gettimeofday(&end_pkt, NULL);
 		if(interrupt)
 			break;
@@ -162,10 +210,10 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 		if(status<=0 && counter>1) {
 			fprintf(stderr, "Didn't receive packet.\n");
 		}
-
 		else {
-			received++;
+			// Receive packet only if packet was transmitted
 			if(packet_sent) {
+				received++;
 				long seconds = (end_pkt.tv_sec - start_pkt.tv_sec);
 				long micros = ((seconds * 1000000) + end_pkt.tv_usec) - (start_pkt.tv_usec);
 				double millis = micros/1000.0;
@@ -179,43 +227,87 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 		}
 
 	}
+	// Get total end time
 	gettimeofday(&end, NULL);
 
 	long seconds = (end.tv_sec - start.tv_sec);
 	long micros = ((seconds * 1000000) + end.tv_usec) - (start.tv_usec);
 	double millis = micros/1000.0;
 
-	average = tsum/(counter-1);
-	tsum /= (counter-1);
-	tsum_2 /= (counter-1);
+	// fprintf(stdout, "counter : %d, received : %d\n", counter, received);
+
+	average = tsum/received;
+	tsum /= received;
+	tsum_2 /= (received);
 	std_dev = sqrt(tsum_2 - tsum*tsum);
 
-	transmitted-=1; // Remove last packet which was interrupted
+	if(interrupt)
+		transmitted--; // Remove last packet which was interrupted
+
 
 	fprintf(stdout, "\n--- %s ping statistics ---\n", hostname);
 	double pkt_loss = 1.0*(transmitted-received)/transmitted*100;
 	fprintf(stdout, "%d packets transmitted, %d received, %0.0f%% packet loss, time %0.0fms\n", transmitted, received, pkt_loss, millis);
 	fprintf(stdout, "rtt min/avg/max/mdev = %0.3f/%0.3f/%0.3f/%0.3f ms\n", mini, maxi, average, std_dev);
+
+	status = close(sockfd);
+	if(status!=0) {
+		fprintf(stderr, "Failed to close socket\n");
+		return;
+	}
+}
+
+/*
+Parge CLI arguments into optional count and hostname
+*/
+void argparse(int argc, char *argv[], int *count, char **hostname) {
+	int m, n, l, ch;
+
+	for(n=1; n<argc; n++) {
+		switch(argv[n][0]) {
+			case '-':
+				l=strlen(argv[n]);
+				for(m=1; m<l; m++) {
+					ch = (int)argv[n][m];
+					switch(ch) {
+						case 'c':
+							n++;
+							*count = atoi(argv[n]);
+							break;
+						default:
+							fprintf(stderr, "USAGE: sudo %s [-c count] <hostname>\n", argv[0]);
+					}
+				}
+				break;
+			default:
+				*hostname = argv[n];
+		}
+	}
 }
 
 int main(int argc, char *argv[]) {
-	if(argc != 2) {
-		fprintf(stderr, "Enable root privilege.\n USAGE: %s <hostname>\n", argv[0]);
+	int c=0;
+	char *hostname=NULL;
+	argparse(argc, argv, &c, &hostname);
+
+	if(argc < 2) {
+		fprintf(stderr, "USAGE: sudo %s [-c count] <hostname>\n", argv[0]);
 		return -1;
 	}
+
+	count = c; // Change global
 
 	struct sockaddr_in server;
 	char *ip_addr;
 
 	// DNS lookup
-
-	ip_addr = dns(argv[1], &server);
+	ip_addr = dns(hostname, &server);
 	if(ip_addr == NULL) {
 		fprintf(stderr, "DNS lookup failed.\n");
 		return -1;
 	}
 
-	fprintf(stdout, "PING: %s (%s) %d bytes of data.\n", argv[1], ip_addr, PING_BYTES);
+	fprintf(stdout, "PING: %s (%s) %d bytes of data.\n", hostname, ip_addr, PING_BYTES);
 
 	// Create socket
 	int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -224,9 +316,11 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
+	// Handle interrupts
 	signal(SIGINT, handle_interrupt);
 
-	ping(sockfd, &server, ip_addr, argv[1]);
+	// Run ping loop
+	ping(sockfd, &server, ip_addr, hostname);
 
 	return 0;
 }
