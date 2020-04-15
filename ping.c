@@ -168,7 +168,7 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 			if(packet_sent) {
 				long seconds = (end_pkt.tv_sec - start_pkt.tv_sec);
 				long micros = ((seconds * 1000000) + end_pkt.tv_usec) - (start_pkt.tv_usec);
-				double millis = seconds*1000.0 + micros/1000.0;
+				double millis = micros/1000.0;
 				mini = MIN(mini, millis);
 				maxi = MAX(maxi, millis);
 				tsum += millis;
@@ -183,7 +183,7 @@ void ping(int sockfd, struct sockaddr_in *dest, char *ip_addr, char*hostname) {
 
 	long seconds = (end.tv_sec - start.tv_sec);
 	long micros = ((seconds * 1000000) + end.tv_usec) - (start.tv_usec);
-	double millis = seconds*1000.0 + micros/1000.0;
+	double millis = micros/1000.0;
 
 	average = tsum/(counter-1);
 	tsum /= (counter-1);
