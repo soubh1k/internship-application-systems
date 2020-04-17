@@ -288,12 +288,13 @@ void argparse(int argc, char *argv[], int *count, char **hostname) {
 int main(int argc, char *argv[]) {
 	int c=0;
 	char *hostname=NULL;
-	argparse(argc, argv, &c, &hostname);
 
 	if(argc < 2) {
 		fprintf(stderr, "USAGE: sudo %s [-c count] <hostname>\n", argv[0]);
 		return -1;
 	}
+	
+	argparse(argc, argv, &c, &hostname);
 
 	count = c; // Change global
 
